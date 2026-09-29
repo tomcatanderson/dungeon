@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dungeon Crawler - Level 1</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #0a0a12;
+    color: #e0e0e8;
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  #game-container {
+    display: flex;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    background: #050508;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  canvas#game {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 60px rgba(0,0,0,0.5);
+    border: 2px solid #2a2a3a;
+    border-radius: 4px;
+  }
+  
+  #hud {
+    width: 320px;
+    background: linear-gradient(180deg, #12121c 0%, #0c0c14 100%);
+    border-left: 2px solid #2a2a3a;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+    font-size: 13px;
+  }
+  
+  .panel {
+    background: rgba(20,20,32,0.9);
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  
+  .panel h3 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #8af;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  
+  #stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .bar-wrap {
+    height: 12px;
+    background: #1a1a28;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  
+  .bar {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.25s ease;
+  }
+  
+  .bar.hp { background: linear-gradient(90deg, #c33, #e55); }
+  .bar.mp { background: linear-gradient(90deg, #36a, #5cf); }
+  .bar.armor { background: linear-gradient(90deg, #666, #aaa); }
+  
+  .stat-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ddd;
+  }
+  
+  #inventory {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    min-height: 80px;
+  }
+  
+  .inv-slot {
+    aspect-ratio: 1;
+    background: #1a1a28;
+    border: 1px solid #333;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s;
+  }
+  
+  .inv-slot:hover {
+    border-color: #6af;
+    background: #22223a;
+  }
+  
+  .inv-slot .qty {
+    position: absolute;
+    bottom: 1px;
+    right: 3px;
+    font-size: 9px;
+    color: #aaa;
+    font-weight: 700;
+  }
+  
+  .inv-slot.selected {
+    border-color: #fa5;
+    box-shadow: 0 0 8px rgba(255,170,50,0.4);
+  }
+  
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.45;
+    max-height: 220px;
+    scrollbar-width: thin;
+    scrollbar-color: #333 #111;
+  }
+  
+  #log .msg {
+    margin-bottom: 4px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  
+  #log .msg.combat { color: #f88; }
+  #log .msg.loot { color: #8f8; }
+  #log .msg.info { color: #8af; }
+  #log .msg.system { color: #aaa; }
+  #log .msg.danger { color: #f55; font-weight: 600; }
+  
+  #controls-hint {
+    font-size: 10px;
+    color: #666;
+    line-height: 1.5;
+  }
+  
+  #controls-hint kbd {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: monospace;
+    color: #ccc;
+  }
+  
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  
+  #overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .modal {
+    background: #161622;
+    border: 2px solid #3a3a5a;
+    border-radius: 12px;
+    padding: 28px 36px;
+    text-align: center;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  
+  .modal h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    color: #fa5;
+    margin-bottom: 16px;
+  }
+  
+  .modal p {
+    margin-bottom: 20px;
+    color: #bbb;
+    line-height: 1.5;
+  }
+  
+  .btn {
+    background: linear-gradient(180deg, #3a6, #284);
+    border: none;
+    color: white;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(50,150,80,0.4);
+  }
+  
+  #minimap {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 120px;
+    height: 84px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #333;
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  
+  #toast {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.85);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 50;
+    border: 1px solid #555;
+  }
+  
+  #toast.show { opacity: 1; }
+
+  /* ===== TURN-BASED COMBAT UI ===== */
+  #combat-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 80;
+    display: none;
+    flex-direction: column;
+    background: linear-gradient(180deg, #1a1028 0%, #0d0818 40%, #1a1525 100%);
+    overflow: hidden;
+  }
+  
+  #combat-screen.active {
+    display: flex;
+  }
+  
+  #combat-arena {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 40px 60px 20px;
+    background:
+      radial-gradient(ellipse at 70% 40%, rgba(120,40,180,0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 30% 60%, rgba(40,80,160,0.12) 0%, transparent 45%);
+  }
+  
+  .combat-fighter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+  }
+  
+  .fighter-sprite {
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 80px;
+    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.5));
+    transition: transform 0.2s, filter 0.2s;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  
+  canvas.fighter-sprite {
+    font-size: 0;
+    background: transparent;
+  }
+  
+  .fighter-sprite.hit {
+    animation: shake 0.35s ease;
+  }
+  
+  .fighter-sprite.attack {
+    animation: lunge 0.4s ease;
+  }
+  
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(6px); }
+  }
+  
+  @keyframes lunge {
+    0%, 100% { transform: translateX(0); }
+    40% { transform: translateX(30px) scale(1.05); }
+  }
+  
+  .fighter-sprite.enemy.attack {
+    animation: lungeL 0.4s ease;
+  }
+  
+  @keyframes lungeL {
+    0%, 100% { transform: translateX(0); }
+    40% { transform: translateX(-30px) scale(1.05); }
+  }
+  
+  .fighter-info {
+    background: rgba(10,10,20,0.85);
+    border: 1px solid #3a3a5a;
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-width: 180px;
+    text-align: center;
+  }
+  
+  .fighter-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    color: #e0e0ff;
+    margin-bottom: 6px;
+  }
+  
+  .fighter-hp-bar {
+    height: 14px;
+    background: #1a1a28;
+    border-radius: 7px;
+    overflow: hidden;
+    border: 1px solid #444;
+    margin-bottom: 4px;
+  }
+  
+  .fighter-hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #c33, #e55);
+    border-radius: 6px;
+    transition: width 0.4s ease;
+  }
+  
+  .fighter-hp-text {
+    font-size: 11px;
+    color: #aaa;
+  }
+  
+  #combat-log {
+    height: 90px;
+    background: rgba(0,0,0,0.6);
+    border-top: 1px solid #333;
+    padding: 10px 20px;
+    font-size: 13px;
+    overflow-y: auto;
+    color: #ccc;
+    line-height: 1.5;
+  }
+  
+  #combat-log .clog {
+    margin-bottom: 2px;
+  }
+  
+  #combat-log .clog.player { color: #8cf; }
+  #combat-log .clog.enemy { color: #f88; }
+  #combat-log .clog.system { color: #aaa; }
+  #combat-log .clog.crit { color: #fa5; font-weight: 700; }
+  
+  #combat-menu {
+    background: rgba(12,12,24,0.95);
+    border-top: 2px solid #3a3a5a;
+    padding: 14px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  
+  .combat-btn {
+    background: linear-gradient(180deg, #2a2a4a 0%, #1a1a32 100%);
+    border: 1px solid #4a4a6a;
+    border-radius: 8px;
+    color: #e0e0ff;
+    padding: 14px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .combat-btn:hover:not(:disabled) {
+    background: linear-gradient(180deg, #3a3a6a 0%, #2a2a4a 100%);
+    border-color: #6af;
+    transform: translateY(-1px);
+  }
+  
+  .combat-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  
+  .combat-btn .btn-icon {
+    font-size: 20px;
+  }
+  
+  .combat-btn .btn-label {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .combat-btn .btn-name {
+    font-size: 13px;
+  }
+  
+  .combat-btn .btn-desc {
+    font-size: 10px;
+    color: #888;
+    font-weight: 400;
+  }
+  
+  #combat-menu.sub-menu {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .combat-back {
+    grid-column: 1 / -1;
+    background: #222;
+    border-color: #444;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="canvas-wrap">
+    <canvas id="game" width="960" height="640"></canvas>
+    <canvas id="minimap" width="120" height="84"></canvas>
+    <div id="toast"></div>
+    
+    <!-- TURN-BASED COMBAT OVERLAY -->
+    <div id="combat-screen">
+      <div id="combat-arena">
+        <div class="combat-fighter" id="player-fighter">
+          <canvas class="fighter-sprite" id="player-sprite" width="140" height="140"></canvas>
+          <div class="fighter-info">
+            <div class="fighter-name" id="player-cname">Knight</div>
+            <div class="fighter-hp-bar"><div class="fighter-hp-fill" id="player-chp" style="width:100%"></div></div>
+            <div class="fighter-hp-text" id="player-chp-text">100 / 100</div>
+          </div>
+        </div>
+        <div class="combat-fighter" id="enemy-fighter">
+          <canvas class="fighter-sprite enemy" id="enemy-sprite" width="140" height="140"></canvas>
+          <div class="fighter-info">
+            <div class="fighter-name" id="enemy-cname">Enemy</div>
+            <div class="fighter-hp-bar"><div class="fighter-hp-fill" id="enemy-chp" style="width:100%"></div></div>
+            <div class="fighter-hp-text" id="enemy-chp-text">20 / 20</div>
+          </div>
+        </div>
+      </div>
+      <div id="combat-log"></div>
+      <div id="combat-menu"></div>
+    </div>
+    
+    <div id="overlay">
+      <div class="modal" id="modal">
+        <h2 id="modal-title">Dungeon Crawler</h2>
+        <p id="modal-text">WASD to move · E interact · Q heal<br>Walk into enemies to start turn-based combat<br><br>Find the stairs to descend deeper...</p>
+        <button class="btn" id="start-btn">Enter the Dungeon</button>
+      </div>
+    </div>
+  </div>
+  <div id="hud">
+    <div class="panel">
+      <h3>Status</h3>
+      <div id="stats">
+        <div class="stat">
+          <span class="stat-label">Health</span>
+          <div class="bar-wrap"><div class="bar hp" id="hp-bar" style="width:100%"></div></div>
+          <span class="stat-value" id="hp-text">100 / 100</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Magic</span>
+          <div class="bar-wrap"><div class="bar mp" id="mp-bar" style="width:100%"></div></div>
+          <span class="stat-value" id="mp-text">50 / 50</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Armor</span>
+          <div class="bar-wrap"><div class="bar armor" id="armor-bar" style="width:0%"></div></div>
+          <span class="stat-value" id="armor-text">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Level</span>
+          <span class="stat-value" id="level-text" style="font-size:18px;margin-top:4px">1</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="panel">
+      <h3>Inventory</h3>
+      <div id="inventory"></div>
+    </div>
+    
+    <div class="panel" style="flex:1;display:flex;flex-direction:column">
+      <h3>Game Log</h3>
+      <div id="log"></div>
+    </div>
+    
+    <div class="panel">
+      <div id="controls-hint">
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp;
+        <kbd>E</kbd> Interact &nbsp;
+        <kbd>Q</kbd> Heal<br>
+        Walk into enemies for turn-based combat
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== EMBEDDED DATA ==========
+const MAP_DATA = {"format":"tilemap-v3","name":"dungeon_level_1","width":40,"height":28,"tileSize":32,"autoEdges":true,"tileset":[{"id":0,"name":"Void","color":"#0a0a0f","solid":true,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":1,"name":"Stone Floor","color":"#6b6b7a","solid":false,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":2,"name":"Stone Wall","color":"#3b3b4a","solid":true,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":3,"name":"Shallow Water","color":"#4a90c8","solid":false,"overlay":false,"interact":null,"damage":0,"speed":0.6,"sprite":null},{"id":4,"name":"Deep Water","color":"#1f4a8a","solid":true,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":5,"name":"Wood Floor","color":"#a0703c","solid":false,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":6,"name":"Wood Wall","color":"#6b4423","solid":true,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":7,"name":"Door","color":"#a0703c","solid":false,"overlay":true,"interact":"open/close","damage":0,"speed":1,"sprite":null},{"id":8,"name":"Chest","color":"#6b6b7a","solid":true,"overlay":true,"interact":"loot","damage":0,"speed":1,"sprite":null},{"id":9,"name":"Stairs Down","color":"#6b6b7a","solid":false,"overlay":true,"interact":"next level","damage":0,"speed":1,"sprite":null},{"id":10,"name":"Wall Torch","color":"#3b3b4a","solid":true,"overlay":false,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":11,"name":"Lava","color":"#d2400f","solid":false,"overlay":false,"interact":null,"damage":5,"speed":1,"sprite":null},{"id":12,"name":"Spikes","color":"#6b6b7a","solid":false,"overlay":true,"interact":null,"damage":2,"speed":1,"sprite":null},{"id":13,"name":"Lever","color":"#3b3b4a","solid":true,"overlay":false,"interact":"toggle","damage":0,"speed":1,"sprite":null},{"id":14,"name":"Player Spawn","color":"#6b6b7a","solid":false,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":15,"name":"Moss","color":"#3f7f3f","solid":false,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":16,"name":"Rubble","color":"#777","solid":false,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":17,"name":"Bones","color":"#ddd","solid":false,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":18,"name":"Carpet","color":"#8a1f2b","solid":false,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null},{"id":19,"name":"Pillar","color":"#8b8b99","solid":true,"overlay":true,"interact":null,"damage":0,"speed":1,"sprite":null}],"spriteSheet":null,"layers":{"tiles":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,10,2,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,8,1,1,1,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,6,6,6,6,6,6,6,6,2,2,1,1,1,1,2,2,2],[2,2,2,10,2,2,2,10,2,10,2,2,2,2,1,1,1,8,10,2,2,2,2,6,5,5,5,5,5,5,6,2,2,1,1,1,1,2,2,2],[2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,5,5,5,5,5,5,7,1,1,1,1,1,1,2,2,2],[2,6,6,7,6,6,2,1,1,1,1,2,2,2,1,16,16,1,1,1,1,1,1,7,5,5,5,5,5,5,7,1,1,1,1,1,1,2,2,2],[2,6,5,5,5,6,2,1,1,1,1,2,2,2,1,1,1,1,2,2,2,2,1,7,5,5,5,5,5,5,6,2,2,1,1,1,1,2,2,2],[2,6,5,8,5,6,2,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,1,6,5,5,5,5,5,5,6,2,2,1,2,2,2,2,2,2],[2,6,5,5,5,6,2,8,1,1,1,2,2,2,2,2,2,2,2,2,2,2,15,6,5,5,5,5,5,5,6,2,2,1,2,2,2,2,2,2],[2,6,6,6,6,6,2,2,2,1,2,2,2,2,2,2,2,2,2,2,2,2,15,6,5,5,5,5,5,5,6,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,10,1,2,2,2,2,2,2,2,2,2,2,2,2,15,6,6,6,6,7,6,6,6,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,14,1,1,3,1,1,1,2,2,2,2,2,2,2,1,16,2,2,2,1,2,2,2,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,1,3,3,3,3,3,1,2,2,2,2,2,2,2,15,16,2,2,2,12,2,2,2,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,1,3,3,4,3,3,1,2,2,2,2,2,2,2,15,16,2,2,2,1,2,2,2,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,3,3,4,4,4,3,3,10,2,2,2,2,2,10,1,16,2,2,2,1,2,2,2,2,2,1,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,3,3,4,4,4,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,2,6,6,6,6,7,6,6,6,2,2,2],[2,2,2,2,2,2,2,2,1,3,3,4,3,3,1,2,2,2,1,1,3,3,3,3,1,1,2,2,2,6,5,5,5,5,5,8,6,2,2,2],[2,2,2,2,2,2,2,2,1,3,3,3,3,3,1,2,2,2,1,3,3,4,4,3,3,1,2,2,2,6,5,5,5,5,5,5,6,2,2,2],[2,2,2,2,2,2,2,2,8,1,1,3,1,1,1,1,1,1,3,3,4,4,4,4,3,3,2,2,2,6,5,6,6,6,5,5,6,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,8,1,1,1,1,1,1,1,3,3,4,4,3,3,1,1,12,1,7,5,6,5,5,5,5,6,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,3,3,3,3,1,1,2,2,2,6,5,6,5,6,6,6,6,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,6,5,6,5,5,5,9,6,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,6,6,6,6,6,6,6,6,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,13,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,16,16,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]],"decor":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,19,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},"collision":[[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,1],[1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],[1,1,1,0,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],[1,1,0,0,0,1,1,0,0,0,0,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,1],[1,1,0,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,0,0,0,0,0,1,1,1,0,1,1,1,1,1,1],[1,1,0,0,0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,0,0,0,0,0,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,0,0,0,0,0,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,1,0,0,0,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,1,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,1,1,1,1,0,1,1,1,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1,0,0,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]],"interactables":[{"x":33,"y":2,"tile":8,"type":"chest","action":"loot"},{"x":17,"y":4,"tile":8,"type":"chest","action":"loot"},{"x":23,"y":5,"tile":7,"type":"door","action":"open/close"},{"x":30,"y":5,"tile":7,"type":"door","action":"open/close"},{"x":3,"y":6,"tile":7,"type":"door","action":"open/close"},{"x":23,"y":6,"tile":7,"type":"door","action":"open/close"},{"x":30,"y":6,"tile":7,"type":"door","action":"open/close"},{"x":23,"y":7,"tile":7,"type":"door","action":"open/close"},{"x":3,"y":8,"tile":8,"type":"chest","action":"loot"},{"x":7,"y":9,"tile":8,"type":"chest","action":"loot"},{"x":27,"y":11,"tile":7,"type":"door","action":"open/close"},{"x":33,"y":16,"tile":7,"type":"door","action":"open/close"},{"x":35,"y":17,"tile":8,"type":"chest","action":"loot"},{"x":8,"y":19,"tile":8,"type":"chest","action":"loot"},{"x":11,"y":20,"tile":8,"type":"chest","action":"loot"},{"x":29,"y":20,"tile":7,"type":"door","action":"open/close"},{"x":35,"y":22,"tile":9,"type":"stairs_down","action":"next level"},{"x":22,"y":25,"tile":13,"type":"lever","action":"toggle"}],"objectTypes":{"chest":{"icon":"📦","fields":{"contains":"items","locked_by":"item"}},"door":{"icon":"🚪","fields":{"requires":"item"}},"pickup":{"icon":"✨","fields":{"item":"item","qty":"num"}},"npc":{"icon":"🧑","fields":{"name":"text","gives_quest":"text","dialog":"text"}},"enemy":{"icon":"👹","fields":{"kind":"text","hp":"num","drops":"items"}},"trigger":{"icon":"⚡","fields":{"event":"text"}}},"objects":[{"x":33,"y":2,"type":"chest","props":{"contains":["potion_mana"]}},{"x":17,"y":4,"type":"chest","props":{"contains":["hashesh"]}},{"x":3,"y":8,"type":"chest","props":{"contains":["fire_staff"]}},{"x":7,"y":9,"type":"chest","props":{"contains":["leather_armor"]}},{"x":35,"y":17,"type":"chest","props":{"contains":["potion_mana"]}},{"x":8,"y":19,"type":"chest","props":{"contains":["potion_health"]}},{"x":11,"y":20,"type":"chest","props":{"contains":["potion_health"]}},{"x":23,"y":7,"type":"door","props":{"requires":"key_bronze"}},{"x":23,"y":6,"type":"door","props":{"requires":"key_bronze"}},{"x":27,"y":11,"type":"door","props":{"requires":"key_silver"}},{"x":30,"y":5,"type":"door","props":{"requires":"key_silver"}},{"x":29,"y":20,"type":"door","props":{"requires":"key_gold"}},{"x":33,"y":16,"type":"door","props":{"requires":"key_gold"}},{"x":3,"y":6,"type":"door","props":{"requires":"key_silver"}},{"x":8,"y":12,"type":"pickup","props":{"item":"key_bronze","qty":1}},{"x":28,"y":6,"type":"pickup","props":{"item":"key_silver","qty":1}},{"x":27,"y":6,"type":"pickup","props":{"item":"key_gold","qty":1}},{"x":36,"y":3,"type":"enemy","props":{"kind":"harpy","hp":28,"atk":5,"drops":[]}},{"x":14,"y":5,"type":"enemy","props":{"kind":"gorgon","hp":32,"atk":6,"drops":[]}},{"x":26,"y":5,"type":"enemy","props":{"kind":"fairy","hp":14,"atk":3,"drops":[]}},{"x":16,"y":4,"type":"enemy","props":{"kind":"succubus","hp":24,"atk":5,"drops":["potion_health"]}},{"x":4,"y":5,"type":"enemy","props":{"kind":"gorgon","hp":32,"atk":6,"drops":[]}},{"x":31,"y":20,"type":"enemy","props":{"kind":"harpy","hp":28,"atk":5,"drops":[]}},{"x":26,"y":7,"type":"npc","props":{"name":"oli","dialog":"heyyy"}},{"x":23,"y":5,"type":"npc","props":{}}],"spawn":{"x":8,"y":12}};
+
+const ITEMS_DATA = {"format":"items-v1","items":[{"id":"key_bronze","name":"Bronze Key","type":"key","tier":1,"desc":"Opens bronze locks."},{"id":"key_silver","name":"Silver Key","type":"key","tier":2,"desc":"Opens silver locks."},{"id":"key_gold","name":"Gold Key","type":"key","tier":3,"desc":"Opens gold locks and boss doors."},{"id":"potion_health","name":"Health Potion","type":"potion","effect":{"heal":30}},{"id":"potion_mana","name":"Mana Potion","type":"potion","effect":{"mana":30}},{"id":"potion_antidote","name":"Antidote","type":"potion","effect":{"cure":"poison"}},{"id":"hashesh","name":"Hashesh","type":"consumable","desc":"Walk through walls for a short time.","effect":{"phase_walls":true,"duration_steps":10}},{"id":"iron_sword","name":"Iron Sword","type":"weapon","stats":{"damage":6,"range":1}},{"id":"hunting_bow","name":"Hunting Bow","type":"weapon","stats":{"damage":4,"range":5}},{"id":"fire_staff","name":"Fire Staff","type":"weapon","stats":{"damage":9,"range":4,"mana_cost":3}},{"id":"leather_armor","name":"Leather Armor","type":"armor","stats":{"defense":2}},{"id":"ancient_relic","name":"Ancient Relic","type":"quest","desc":"Quest item."},{"id":"sealed_letter","name":"Sealed Letter","type":"quest","desc":"Quest item."}]};
+
+// ========== GAME ENGINE ==========
+const TILE = MAP_DATA.tileSize;
+const MAP_W = MAP_DATA.width;
+const MAP_H = MAP_DATA.height;
+const tileset = MAP_DATA.tileset;
+const tileMap = MAP_DATA.layers.tiles;
+const decorMap = MAP_DATA.layers.decor;
+const collision = MAP_DATA.collision;
+
+const itemDB = {};
+ITEMS_DATA.items.forEach(i => itemDB[i.id] = i);
+
+const ITEM_ICONS = {
+  key_bronze: '🔑', key_silver: '🗝️', key_gold: '🏆',
+  potion_health: '🧪', potion_mana: '💧', potion_antidote: '💉',
+  hashesh: '🌿', iron_sword: '⚔️', hunting_bow: '🏹',
+  fire_staff: '🔥', leather_armor: '🛡️', ancient_relic: '📜', sealed_letter: '✉️'
+};
+
+// Mythical enemy definitions
+const ENEMY_DEFS = {
+  harpy: {
+    name: 'Harpy',
+    emoji: '🦅',
+    color: '#c47a4a',
+    size: 0.95,
+    hp: 28, atk: 5,
+    moves: [
+      { name: 'Talon Slash', power: 6, type: 'phys' },
+      { name: 'Wing Buffet', power: 4, type: 'phys' },
+      { name: 'Screech', power: 3, type: 'spec', effect: 'lower_def' }
+    ]
+  },
+  gorgon: {
+    name: 'Gorgon',
+    emoji: '🐍',
+    color: '#4a8a5a',
+    size: 1.15,
+    hp: 32, atk: 6,
+    hasSprites: true,
+    facesLeft: true, // source art faces left
+    contentCx: 54,
+    moves: [
+      { name: 'Serpent Strike', power: 7, type: 'phys' },
+      { name: 'Petrify Gaze', power: 5, type: 'spec', effect: 'stun' },
+      { name: 'Venom Bite', power: 4, type: 'phys', effect: 'poison' }
+    ]
+  },
+  fairy: {
+    name: 'Fairy',
+    emoji: '🧚',
+    color: '#e8a0d0',
+    size: 0.7,
+    hp: 14, atk: 3,
+    moves: [
+      { name: 'Pixie Dust', power: 4, type: 'spec' },
+      { name: 'Fairy Dart', power: 5, type: 'spec' },
+      { name: 'Dazzle', power: 2, type: 'spec', effect: 'confuse' }
+    ]
+  },
+  succubus: {
+    name: 'Succubus',
+    emoji: '😈',
+    color: '#a04070',
+    size: 0.95,
+    hp: 24, atk: 5,
+    moves: [
+      { name: 'Dark Kiss', power: 6, type: 'spec' },
+      { name: 'Life Drain', power: 5, type: 'spec', effect: 'drain' },
+      { name: 'Charm', power: 3, type: 'spec', effect: 'charm' }
+    ]
+  }
+};
+
+// Canvas
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const minimap = document.getElementById('minimap');
+const mctx = minimap.getContext('2d');
+
+let camX = 0, camY = 0;
+const VIEW_W = canvas.width;
+const VIEW_H = canvas.height;
+
+// Knight sprite sheets (side-view, 128×128 frames)
+// idle:4  walk:8  run:7  attack1:5  attack2:4  defend:5
+const KNIGHT_FRAME = 128;
+const knightSprites = {
+  idle: new Image(), walk: new Image(), run: new Image(),
+  attack1: new Image(), attack2: new Image(), defend: new Image()
+};
+const knightFrameCount = { idle: 4, walk: 8, run: 7, attack1: 5, attack2: 4, defend: 5 };
+let knightReadyCount = 0;
+Object.keys(knightSprites).forEach(key => {
+  knightSprites[key].onload = () => { knightReadyCount++; };
+  knightSprites[key].src = 'knight_' + key + '.png';
+});
+
+// Gorgon sprite sheets (side-view, faces LEFT by default)
+// idle:7  walk:13  attack:7  dead:3
+const GORGON_FRAME = 128;
+const gorgonSprites = {
+  idle: new Image(), walk: new Image(), attack: new Image(), dead: new Image()
+};
+const gorgonFrameCount = { idle: 7, walk: 13, attack: 7, dead: 3 };
+let gorgonReadyCount = 0;
+Object.keys(gorgonSprites).forEach(key => {
+  gorgonSprites[key].onload = () => { gorgonReadyCount++; };
+  gorgonSprites[key].src = 'gorgon_' + key + '.png';
+});
+// Content center in source frames (pixels from left of 128 cell)
+const GORGON_CONTENT_CX = 54;
+
+// Clean packed tileset atlas (only solid 32×32 tiles, no blank space)
+// Layout: 16 cols × 3 rows
+// Row 0: floor_0..11, wall_0..3
+// Row 1: wall_4..7, structwall_0..11
+// Row 2: remaining struct walls
+const tileAtlas = new Image();
+let tileAtlasReady = false;
+tileAtlas.onload = () => { tileAtlasReady = true; };
+tileAtlas.src = 'tiles_atlas.png';
+
+const ATLAS_COLS = 16;
+const ATLAS_CELL = 32;
+// Index ranges in the packed atlas
+const ATLAS = {
+  floor:  { start: 0,  count: 12 }, // tiles 0-11
+  wall:   { start: 12, count: 14 }, // tiles 12-25 (wall + structwall mix)
+  wood:   { start: 12, count: 8 },  // reuse wall set with tint
+};
+
+function hashTile(tx, ty) {
+  return ((tx * 374761393 + ty * 668265263) >>> 0);
+}
+
+function drawAtlasTile(index, dx, dy, dsize) {
+  if (!tileAtlasReady) return false;
+  const col = index % ATLAS_COLS;
+  const row = Math.floor(index / ATLAS_COLS);
+  ctx.drawImage(
+    tileAtlas,
+    col * ATLAS_CELL, row * ATLAS_CELL, ATLAS_CELL, ATLAS_CELL,
+    dx, dy, dsize, dsize
+  );
+  return true;
+}
+
+function drawFloorTile(dx, dy, dsize, tx, ty) {
+  const h = hashTile(tx, ty);
+  const idx = ATLAS.floor.start + (h % ATLAS.floor.count);
+  return drawAtlasTile(idx, dx, dy, dsize);
+}
+
+function drawWallTile(dx, dy, dsize, tx, ty) {
+  const h = hashTile(tx, ty);
+  const idx = ATLAS.wall.start + (h % ATLAS.wall.count);
+  return drawAtlasTile(idx, dx, dy, dsize);
+}
+
+// Player
+const player = {
+  x: MAP_DATA.spawn.x * TILE + TILE/2,
+  y: MAP_DATA.spawn.y * TILE + TILE/2,
+  speed: 2.4,
+  dir: 0,           // 0=down 1=left 2=right 3=up
+  faceLeft: false,  // horizontal flip for side-view art
+  frame: 0,
+  frameTimer: 0,
+  moving: false,
+  anim: 'idle',     // idle | walk | run
+  hp: 100, maxHp: 100,
+  mp: 50, maxMp: 50,
+  armor: 0,
+  inv: [],
+  weapon: null,
+  invuln: 0,
+  phase: 0,
+  facing: {x:0, y:1}
+};
+
+// Combat state
+let inCombat = false;
+let combatEnemy = null;
+let combatBusy = false; // waiting for anim / turn
+let combatPlayerDef = 0; // temp def buff/debuff
+let combatEnemyDef = 0;
+let combatStun = 0; // turns enemy is stunned
+let combatPoison = 0; // turns player poisoned
+
+let entities = [];
+let particles = [];
+let floatingTexts = [];
+let doorsOpen = new Set();
+let chestsOpened = new Set();
+let keys = { w:0, a:0, s:0, d:0, e:0, q:0 };
+let gameStarted = false;
+let gameOver = false;
+let won = false;
+let tick = 0;
+let logEl = document.getElementById('log');
+
+function log(msg, cls='info') {
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = msg;
+  logEl.prepend(d);
+  if (logEl.children.length > 40) logEl.removeChild(logEl.lastChild);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function combatLog(msg, cls='system') {
+  const el = document.getElementById('combat-log');
+  const d = document.createElement('div');
+  d.className = 'clog ' + cls;
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// Init entities
+function initEntities() {
+  entities = [];
+  MAP_DATA.objects.forEach(obj => {
+    const e = {
+      x: obj.x * TILE + TILE/2,
+      y: obj.y * TILE + TILE/2,
+      tx: obj.x, ty: obj.y,
+      type: obj.type,
+      props: {...obj.props},
+      alive: true,
+      opened: false
+    };
+    if (obj.type === 'enemy') {
+      const def = ENEMY_DEFS[obj.props.kind] || ENEMY_DEFS.fairy;
+      e.kind = obj.props.kind;
+      e.name = def.name;
+      e.hp = obj.props.hp || def.hp;
+      e.maxHp = e.hp;
+      e.atk = obj.props.atk || def.atk;
+      e.emoji = def.emoji;
+      e.color = def.color;
+      e.size = def.size;
+      e.moves = def.moves;
+      e.aggro = 2.2 * TILE;
+      e.hasSprites = !!def.hasSprites;
+      e.facesLeft = def.facesLeft !== false;
+      e.contentCx = def.contentCx || 64;
+      e.anim = 'idle';
+      e.frame = 0;
+      e.frameTimer = 0;
+      e.faceLeft = true;
+      e.moving = false;
+    }
+    if (obj.type === 'door') e.requires = obj.props.requires;
+    if (obj.type === 'chest') e.contains = obj.props.contains || [];
+    if (obj.type === 'pickup') {
+      e.item = obj.props.item;
+      e.qty = obj.props.qty || 1;
+    }
+    entities.push(e);
+  });
+  
+  const stairs = MAP_DATA.interactables.find(i => i.type === 'stairs_down');
+  if (stairs) {
+    entities.push({
+      x: stairs.x * TILE + TILE/2,
+      y: stairs.y * TILE + TILE/2,
+      tx: stairs.x, ty: stairs.y,
+      type: 'stairs',
+      alive: true,
+      name: 'Stairs Down'
+    });
+  }
+}
+
+function isSolid(tx, ty) {
+  if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return true;
+  if (player.phase > 0) return false;
+  if (collision[ty][tx]) return true;
+  for (const e of entities) {
+    if (e.type === 'door' && e.tx === tx && e.ty === ty && !e.opened) return true;
+    if (e.type === 'chest' && e.tx === tx && e.ty === ty) return true;
+  }
+  return false;
+}
+
+function canMove(px, py, radius = 10) {
+  const points = [
+    [px - radius, py - radius], [px + radius, py - radius],
+    [px - radius, py + radius], [px + radius, py + radius], [px, py]
+  ];
+  for (const [x,y] of points) {
+    if (isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) return false;
+  }
+  return true;
+}
+
+function getTileDamage(px, py) {
+  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return 0;
+  return tileset[tileMap[ty][tx]]?.damage || 0;
+}
+
+function getTileSpeed(px, py) {
+  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return 1;
+  return tileset[tileMap[ty][tx]]?.speed || 1;
+}
+
+// Input
+window.addEventListener('keydown', e => {
+  if (inCombat) return;
+  const k = e.key.toLowerCase();
+  if (k === 'w' || k === 'arrowup') keys.w = 1;
+  if (k === 'a' || k === 'arrowleft') keys.a = 1;
+  if (k === 's' || k === 'arrowdown') keys.s = 1;
+  if (k === 'd' || k === 'arrowright') keys.d = 1;
+  if (k === 'e') keys.e = 1;
+  if (k === 'q') keys.q = 1;
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'w' || k === 'arrowup') keys.w = 0;
+  if (k === 'a' || k === 'arrowleft') keys.a = 0;
+  if (k === 's' || k === 'arrowdown') keys.s = 0;
+  if (k === 'd' || k === 'arrowright') keys.d = 0;
+  if (k === 'e') keys.e = 0;
+  if (k === 'q') keys.q = 0;
+});
+
+// ===== TURN-BASED COMBAT =====
+let combatPlayerAnim = 'idle';
+let combatPlayerFrame = 0;
+let combatEnemyAnim = 'idle';
+let combatEnemyFrame = 0;
+let combatAnimTimer = null;
+let combatEnemyAnimTimer = null;
+
+function drawCombatPlayer(anim, frame) {
+  const canvas = document.getElementById('player-sprite');
+  if (!canvas || !canvas.getContext) return;
+  const c = canvas.getContext('2d');
+  c.clearRect(0, 0, 140, 140);
+  const img = knightSprites[anim] || knightSprites.idle;
+  const n = knightFrameCount[anim] || 4;
+  const f = ((frame % n) + n) % n;
+  if (img && img.complete && img.naturalWidth > 0) {
+    c.drawImage(img, f * KNIGHT_FRAME, 0, KNIGHT_FRAME, KNIGHT_FRAME, 5, 5, 130, 130);
+  }
+}
+
+function drawCombatEnemy(anim, frame) {
+  const canvas = document.getElementById('enemy-sprite');
+  if (!canvas || !canvas.getContext) return;
+  const c = canvas.getContext('2d');
+  c.clearRect(0, 0, 140, 140);
+  
+  if (combatEnemy && combatEnemy.hasSprites && combatEnemy.kind === 'gorgon') {
+    const img = gorgonSprites[anim] || gorgonSprites.idle;
+    const n = gorgonFrameCount[anim] || 7;
+    const f = ((frame % n) + n) % n;
+    if (img && img.complete && img.naturalWidth > 0) {
+      // Gorgon art faces left; flip so she faces the player (left side of screen)
+      c.save();
+      c.translate(140, 0);
+      c.scale(-1, 1);
+      c.drawImage(img, f * GORGON_FRAME, 0, GORGON_FRAME, GORGON_FRAME, 5, 5, 130, 130);
+      c.restore();
+    }
+  } else if (combatEnemy) {
+    // Emoji fallback
+    c.font = '80px serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(combatEnemy.emoji || '👹', 70, 70);
+  }
+}
+
+function playCombatAnim(anim, onDone) {
+  combatPlayerAnim = anim;
+  combatPlayerFrame = 0;
+  const n = knightFrameCount[anim] || 4;
+  if (combatAnimTimer) clearInterval(combatAnimTimer);
+  drawCombatPlayer(anim, 0);
+  combatAnimTimer = setInterval(() => {
+    combatPlayerFrame++;
+    if (combatPlayerFrame >= n) {
+      clearInterval(combatAnimTimer);
+      combatAnimTimer = null;
+      combatPlayerAnim = 'idle';
+      combatPlayerFrame = 0;
+      drawCombatPlayer('idle', 0);
+      if (onDone) onDone();
+    } else {
+      drawCombatPlayer(anim, combatPlayerFrame);
+    }
+  }, 90);
+}
+
+function playEnemyCombatAnim(anim, onDone) {
+  combatEnemyAnim = anim;
+  combatEnemyFrame = 0;
+  const n = (combatEnemy && combatEnemy.hasSprites)
+    ? (gorgonFrameCount[anim] || 7) : 4;
+  if (combatEnemyAnimTimer) clearInterval(combatEnemyAnimTimer);
+  drawCombatEnemy(anim, 0);
+  combatEnemyAnimTimer = setInterval(() => {
+    combatEnemyFrame++;
+    if (combatEnemyFrame >= n) {
+      clearInterval(combatEnemyAnimTimer);
+      combatEnemyAnimTimer = null;
+      combatEnemyAnim = 'idle';
+      combatEnemyFrame = 0;
+      drawCombatEnemy('idle', 0);
+      if (onDone) onDone();
+    } else {
+      drawCombatEnemy(anim, combatEnemyFrame);
+    }
+  }, 100);
+}
+
+function startCombat(enemy) {
+  if (inCombat || !enemy.alive) return;
+  inCombat = true;
+  combatEnemy = enemy;
+  combatBusy = false;
+  combatPlayerDef = 0;
+  combatEnemyDef = 0;
+  combatStun = 0;
+  combatPoison = 0;
+  
+  document.getElementById('combat-screen').classList.add('active');
+  document.getElementById('enemy-cname').textContent = enemy.name;
+  document.getElementById('player-cname').textContent = 'Knight';
+  
+  drawCombatPlayer('idle', 0);
+  drawCombatEnemy('idle', 0);
+  
+  // Idle loops while waiting
+  if (combatAnimTimer) clearInterval(combatAnimTimer);
+  if (combatEnemyAnimTimer) clearInterval(combatEnemyAnimTimer);
+  combatAnimTimer = setInterval(() => {
+    if (combatBusy) return;
+    combatPlayerFrame = (combatPlayerFrame + 1) % knightFrameCount.idle;
+    drawCombatPlayer('idle', combatPlayerFrame);
+    if (combatEnemy && combatEnemy.hasSprites) {
+      combatEnemyFrame = (combatEnemyFrame + 1) % gorgonFrameCount.idle;
+      drawCombatEnemy('idle', combatEnemyFrame);
+    }
+  }, 160);
+  
+  updateCombatUI();
+  document.getElementById('combat-log').innerHTML = '';
+  combatLog(`A wild ${enemy.name} appears!`, 'system');
+  showCombatMainMenu();
+}
+
+function updateCombatUI() {
+  const e = combatEnemy;
+  const php = Math.max(0, player.hp);
+  const ehp = Math.max(0, e.hp);
+  document.getElementById('player-chp').style.width = (php / player.maxHp * 100) + '%';
+  document.getElementById('player-chp-text').textContent = `${Math.ceil(php)} / ${player.maxHp}`;
+  document.getElementById('enemy-chp').style.width = (ehp / e.maxHp * 100) + '%';
+  document.getElementById('enemy-chp-text').textContent = `${Math.ceil(ehp)} / ${e.maxHp}`;
+  
+  // also update main HUD
+  document.getElementById('hp-bar').style.width = (php / player.maxHp * 100) + '%';
+  document.getElementById('hp-text').textContent = `${Math.ceil(php)} / ${player.maxHp}`;
+  document.getElementById('mp-bar').style.width = (player.mp / player.maxMp * 100) + '%';
+  document.getElementById('mp-text').textContent = `${Math.ceil(player.mp)} / ${player.maxMp}`;
+}
+
+function showCombatMainMenu() {
+  const menu = document.getElementById('combat-menu');
+  menu.innerHTML = '';
+  menu.className = '';
+  
+  const btns = [
+    { icon: '⚔️', name: 'Fight', desc: 'Choose an attack', action: showFightMenu },
+    { icon: '🧪', name: 'Item', desc: 'Use a potion', action: showItemMenu },
+    { icon: '🏃', name: 'Flee', desc: 'Try to escape', action: tryFlee },
+    { icon: '✨', name: 'Special', desc: 'Magic / weapon skill', action: showSpecialMenu }
+  ];
+  
+  btns.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'combat-btn';
+    btn.disabled = combatBusy;
+    btn.innerHTML = `<span class="btn-icon">${b.icon}</span><span class="btn-label"><span class="btn-name">${b.name}</span><span class="btn-desc">${b.desc}</span></span>`;
+    btn.onclick = () => { if (!combatBusy) b.action(); };
+    menu.appendChild(btn);
+  });
+}
+
+function showFightMenu() {
+  const menu = document.getElementById('combat-menu');
+  menu.innerHTML = '';
+  
+  const moves = [
+    { name: 'Strike', power: 8, type: 'phys', desc: 'Basic melee attack' },
+    { name: 'Heavy Blow', power: 12, type: 'phys', desc: 'Stronger hit, less accurate' },
+    { name: 'Quick Jab', power: 5, type: 'phys', desc: 'Fast, reliable damage' }
+  ];
+  
+  // boost from weapon
+  if (player.weapon) {
+    const w = player.weapon.stats.damage || 0;
+    moves[0].power += Math.floor(w * 0.6);
+    moves[1].power += Math.floor(w * 0.8);
+    moves[2].power += Math.floor(w * 0.4);
+  }
+  
+  moves.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'combat-btn';
+    btn.innerHTML = `<span class="btn-icon">🗡️</span><span class="btn-label"><span class="btn-name">${m.name}</span><span class="btn-desc">~${m.power} dmg · ${m.desc}</span></span>`;
+    btn.onclick = () => playerAttack(m);
+    menu.appendChild(btn);
+  });
+  
+  const back = document.createElement('button');
+  back.className = 'combat-btn combat-back';
+  back.textContent = '← Back';
+  back.onclick = showCombatMainMenu;
+  menu.appendChild(back);
+}
+
+function showSpecialMenu() {
+  const menu = document.getElementById('combat-menu');
+  menu.innerHTML = '';
+  
+  const specials = [];
+  
+  if (player.weapon && player.weapon.id === 'fire_staff') {
+    specials.push({ name: 'Fire Bolt', power: 14, type: 'spec', mana: 8, desc: 'Burning magical projectile' });
+    specials.push({ name: 'Flame Wave', power: 10, type: 'spec', mana: 12, desc: 'Area fire damage' });
+  } else if (player.weapon && player.weapon.id === 'hunting_bow') {
+    specials.push({ name: 'Precise Shot', power: 11, type: 'phys', mana: 0, desc: 'Aimed arrow' });
+  } else {
+    specials.push({ name: 'Arcane Spark', power: 7, type: 'spec', mana: 5, desc: 'Basic magic' });
+  }
+  
+  specials.push({ name: 'Defend', power: 0, type: 'buff', mana: 0, desc: 'Raise defense this turn' });
+  
+  specials.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'combat-btn';
+    const can = player.mp >= (m.mana || 0);
+    btn.disabled = !can;
+    btn.innerHTML = `<span class="btn-icon">✨</span><span class="btn-label"><span class="btn-name">${m.name}${m.mana ? ' ('+m.mana+' MP)' : ''}</span><span class="btn-desc">${m.desc}</span></span>`;
+    btn.onclick = () => {
+      if (player.mp < (m.mana || 0)) return;
+      if (m.mana) player.mp -= m.mana;
+      if (m.name === 'Defend') {
+        combatBusy = true;
+        combatPlayerDef = 4;
+        combatLog('You brace yourself! Defense up!', 'player');
+        playCombatAnim('defend', () => setTimeout(() => endPlayerTurn(), 200));
+      } else {
+        playerAttack(m);
+      }
+    };
+    menu.appendChild(btn);
+  });
+  
+  const back = document.createElement('button');
+  back.className = 'combat-btn combat-back';
+  back.textContent = '← Back';
+  back.onclick = showCombatMainMenu;
+  menu.appendChild(back);
+}
+
+function showItemMenu() {
+  const menu = document.getElementById('combat-menu');
+  menu.innerHTML = '';
+  
+  const pots = player.inv.filter(i => i.def.type === 'potion' && i.qty > 0);
+  if (pots.length === 0) {
+    combatLog('No usable items!', 'system');
+    showCombatMainMenu();
+    return;
+  }
+  
+  pots.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'combat-btn';
+    btn.innerHTML = `<span class="btn-icon">${ITEM_ICONS[p.id] || '🧪'}</span><span class="btn-label"><span class="btn-name">${p.def.name} x${p.qty}</span><span class="btn-desc">${p.def.effect.heal ? 'Heal '+p.def.effect.heal : p.def.effect.mana ? 'Restore '+p.def.effect.mana+' MP' : ''}</span></span>`;
+    btn.onclick = () => useCombatItem(p);
+    menu.appendChild(btn);
+  });
+  
+  const back = document.createElement('button');
+  back.className = 'combat-btn combat-back';
+  back.textContent = '← Back';
+  back.onclick = showCombatMainMenu;
+  menu.appendChild(back);
+}
+
+function useCombatItem(p) {
+  if (combatBusy) return;
+  combatBusy = true;
+  p.qty--;
+  if (p.qty <= 0) player.inv = player.inv.filter(i => i.qty > 0);
+  updateInventoryUI();
+  
+  if (p.def.effect.heal) {
+    const heal = p.def.effect.heal;
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    combatLog(`Used ${p.def.name}! Restored ${heal} HP.`, 'player');
+  } else if (p.def.effect.mana) {
+    const m = p.def.effect.mana;
+    player.mp = Math.min(player.maxMp, player.mp + m);
+    combatLog(`Used ${p.def.name}! Restored ${m} MP.`, 'player');
+  }
+  updateCombatUI();
+  setTimeout(() => endPlayerTurn(), 600);
+}
+
+function tryFlee() {
+  if (combatBusy) return;
+  combatBusy = true;
+  const chance = 0.55 + (player.hp / player.maxHp) * 0.2;
+  if (Math.random() < chance) {
+    combatLog('Got away safely!', 'system');
+    setTimeout(endCombat, 800);
+  } else {
+    combatLog("Couldn't escape!", 'system');
+    setTimeout(() => endPlayerTurn(), 700);
+  }
+}
+
+function playerAttack(move) {
+  if (combatBusy) return;
+  combatBusy = true;
+  
+  // Choose attack animation
+  const atkAnim = (move.name === 'Heavy Blow' || move.name === 'Flame Wave') ? 'attack2' : 'attack1';
+  
+  // accuracy
+  let hitChance = move.name === 'Heavy Blow' ? 0.75 : 0.92;
+  if (Math.random() > hitChance) {
+    combatLog(`Your ${move.name} missed!`, 'system');
+    playCombatAnim(atkAnim, () => setTimeout(() => endPlayerTurn(), 300));
+    return;
+  }
+  
+  let dmg = move.power + Math.floor(Math.random() * 4) - 1;
+  dmg = Math.max(1, dmg - combatEnemyDef);
+  
+  // crit
+  let isCrit = Math.random() < 0.12;
+  if (isCrit) {
+    dmg = Math.floor(dmg * 1.6);
+    combatLog(`Critical hit! ${move.name} deals ${dmg} damage!`, 'crit');
+  } else {
+    combatLog(`You used ${move.name}! Dealt ${dmg} damage.`, 'player');
+  }
+  
+  combatEnemy.hp -= dmg;
+  playCombatAnim(atkAnim, () => {
+    animateHit('enemy-sprite', 'hit');
+    updateCombatUI();
+    if (combatEnemy.hp <= 0) {
+      combatEnemy.hp = 0;
+      setTimeout(() => {
+        combatLog(`${combatEnemy.name} was defeated!`, 'system');
+        setTimeout(() => winCombat(), 700);
+      }, 300);
+      return;
+    }
+    setTimeout(() => endPlayerTurn(), 400);
+  });
+  updateCombatUI();
+}
+
+function endPlayerTurn() {
+  combatPlayerDef = Math.max(0, combatPlayerDef - 1); // decay? keep for one enemy turn
+  
+  // poison tick
+  if (combatPoison > 0) {
+    combatPoison--;
+    const pd = 3;
+    player.hp -= pd;
+    combatLog(`Poison deals ${pd} damage!`, 'enemy');
+    updateCombatUI();
+    if (player.hp <= 0) {
+      player.hp = 0;
+      setTimeout(() => loseCombat(), 600);
+      return;
+    }
+  }
+  
+  setTimeout(() => enemyTurn(), 400);
+}
+
+function enemyTurn() {
+  if (!combatEnemy || combatEnemy.hp <= 0) return;
+  
+  if (combatStun > 0) {
+    combatStun--;
+    combatLog(`${combatEnemy.name} is stunned and can't move!`, 'system');
+    combatBusy = false;
+    showCombatMainMenu();
+    return;
+  }
+  
+  const moves = combatEnemy.moves;
+  const move = moves[Math.floor(Math.random() * moves.length)];
+  
+  // accuracy
+  if (Math.random() > 0.88) {
+    combatLog(`${combatEnemy.name}'s ${move.name} missed!`, 'system');
+    combatBusy = false;
+    showCombatMainMenu();
+    return;
+  }
+  
+  let dmg = move.power + Math.floor(Math.random() * 3);
+  dmg = Math.max(1, dmg - Math.floor(player.armor * 0.5) - combatPlayerDef);
+  
+  combatLog(`${combatEnemy.name} used ${move.name}! Dealt ${dmg} damage.`, 'enemy');
+  player.hp -= dmg;
+  
+  // effects
+  if (move.effect === 'poison' && Math.random() < 0.4) {
+    combatPoison = 3;
+    combatLog('You were poisoned!', 'enemy');
+  }
+  if (move.effect === 'drain') {
+    const heal = Math.floor(dmg * 0.4);
+    combatEnemy.hp = Math.min(combatEnemy.maxHp, combatEnemy.hp + heal);
+    combatLog(`${combatEnemy.name} drained ${heal} HP!`, 'enemy');
+  }
+  if (move.effect === 'lower_def') {
+    combatPlayerDef = -2;
+    combatLog('Your defense was lowered!', 'enemy');
+  }
+  
+  const finishEnemyTurn = () => {
+    animateHit('player-sprite', 'hit');
+    updateCombatUI();
+    combatPlayerDef = 0;
+    if (player.hp <= 0) {
+      player.hp = 0;
+      setTimeout(() => loseCombat(), 700);
+      return;
+    }
+    combatBusy = false;
+    showCombatMainMenu();
+  };
+  
+  if (combatEnemy.hasSprites && combatEnemy.kind === 'gorgon') {
+    playEnemyCombatAnim('attack', finishEnemyTurn);
+  } else {
+    animateHit('enemy-sprite', 'attack');
+    setTimeout(finishEnemyTurn, 400);
+  }
+}
+
+function animateHit(id, cls) {
+  const el = document.getElementById(id);
+  el.classList.remove('hit', 'attack');
+  void el.offsetWidth;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 450);
+}
+
+function winCombat() {
+  const e = combatEnemy;
+  log(`Defeated ${e.name}!`, 'combat');
+  
+  const finish = () => {
+    e.alive = false;
+    if (e.props.drops) e.props.drops.forEach(id => addItem(id));
+    if (Math.random() < 0.35) addItem('potion_health');
+    if (Math.random() < 0.2) addItem('potion_mana');
+    player.hp = Math.min(player.maxHp, player.hp + 5);
+    player.mp = Math.min(player.maxMp, player.mp + 3);
+    endCombat();
+  };
+  
+  if (e.hasSprites && e.kind === 'gorgon') {
+    playEnemyCombatAnim('dead', () => setTimeout(finish, 400));
+  } else {
+    finish();
+  }
+}
+
+function loseCombat() {
+  gameOver = true;
+  endCombat();
+  showModal('You Died', 'The dungeon claims another soul...<br>Refresh to try again.', false);
+}
+
+function endCombat() {
+  inCombat = false;
+  combatEnemy = null;
+  combatBusy = false;
+  if (combatAnimTimer) { clearInterval(combatAnimTimer); combatAnimTimer = null; }
+  if (combatEnemyAnimTimer) { clearInterval(combatEnemyAnimTimer); combatEnemyAnimTimer = null; }
+  document.getElementById('combat-screen').classList.remove('active');
+  updateCombatUI();
+}
+
+// Inventory / interact (unchanged logic)
+function addItem(id, qty = 1) {
+  const def = itemDB[id];
+  if (!def) return;
+  const existing = player.inv.find(i => i.id === id);
+  if (existing) existing.qty += qty;
+  else player.inv.push({ id, qty, def });
+  log(`Picked up ${def.name}${qty > 1 ? ' x'+qty : ''}`, 'loot');
+  toast(def.name);
+  updateInventoryUI();
+  if (def.type === 'weapon') {
+    player.weapon = def;
+    log(`Equipped ${def.name}`, 'info');
+  }
+  if (def.type === 'armor') {
+    player.armor = def.stats.defense || 0;
+    log(`Equipped ${def.name} (+${player.armor} armor)`, 'info');
+  }
+}
+
+function useHeal() {
+  if (inCombat) return;
+  const pot = player.inv.find(i => i.id === 'potion_health' && i.qty > 0);
+  if (!pot) { log('No health potions!', 'danger'); return; }
+  pot.qty--;
+  if (pot.qty <= 0) player.inv = player.inv.filter(i => i.qty > 0);
+  const heal = pot.def.effect.heal || 30;
+  player.hp = Math.min(player.maxHp, player.hp + heal);
+  log(`Used Health Potion (+${heal} HP)`, 'loot');
+  updateInventoryUI();
+}
+
+function updateInventoryUI() {
+  const inv = document.getElementById('inventory');
+  inv.innerHTML = '';
+  for (let i = 0; i < 10; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    if (player.inv[i]) {
+      const it = player.inv[i];
+      slot.textContent = ITEM_ICONS[it.id] || '❓';
+      slot.title = it.def.name + (it.qty > 1 ? ' x' + it.qty : '');
+      if (it.qty > 1) {
+        const q = document.createElement('span');
+        q.className = 'qty';
+        q.textContent = it.qty;
+        slot.appendChild(q);
+      }
+      if (player.weapon && player.weapon.id === it.id) slot.classList.add('selected');
+    }
+    inv.appendChild(slot);
+  }
+}
+
+function doInteract() {
+  if (inCombat) return;
+  const px = player.x, py = player.y;
+  let closest = null, closestD = 40;
+  
+  for (const e of entities) {
+    if (!e.alive && e.type !== 'chest' && e.type !== 'door') continue;
+    const d = Math.hypot(e.x - px, e.y - py);
+    if (d < closestD) { closestD = d; closest = e; }
+  }
+  
+  if (!closest) { log('Nothing to interact with.', 'system'); return; }
+  
+  if (closest.type === 'pickup' && closest.alive) {
+    addItem(closest.item, closest.qty);
+    closest.alive = false;
+    return;
+  }
+  
+  if (closest.type === 'chest') {
+    if (closest.opened) { log('Chest is empty.', 'system'); return; }
+    closest.opened = true;
+    (closest.contains || []).forEach(id => addItem(id));
+    log('Opened chest!', 'loot');
+    return;
+  }
+  
+  if (closest.type === 'door') {
+    if (closest.opened) { log('Door is already open.', 'system'); return; }
+    const req = closest.requires;
+    if (req) {
+      const has = player.inv.find(i => i.id === req && i.qty > 0);
+      if (!has) { log(`Requires ${itemDB[req]?.name || req}!`, 'danger'); return; }
+      has.qty--;
+      if (has.qty <= 0) player.inv = player.inv.filter(i => i.qty > 0);
+      updateInventoryUI();
+      log(`Used ${itemDB[req].name} to unlock door.`, 'loot');
+    }
+    closest.opened = true;
+    doorsOpen.add(closest.tx + ',' + closest.ty);
+    log('Door opened!', 'info');
+    return;
+  }
+  
+  if (closest.type === 'npc') {
+    const name = closest.props.name || 'Stranger';
+    const dialog = closest.props.dialog || '...';
+    log(`${name}: "${dialog}"`, 'info');
+    toast(name + ': ' + dialog);
+    return;
+  }
+  
+  if (closest.type === 'stairs') {
+    won = true;
+    showModal('Victory!', 'You found the stairs and descend deeper into the dungeon...<br>Thanks for playing!', true);
+    return;
+  }
+}
+
+// Update exploration
+function update() {
+  if (!gameStarted || gameOver || won || inCombat) return;
+  tick++;
+  
+  let mx = 0, my = 0;
+  if (keys.w) my -= 1;
+  if (keys.s) my += 1;
+  if (keys.a) mx -= 1;
+  if (keys.d) mx += 1;
+  
+  if (mx || my) {
+    const len = Math.hypot(mx, my) || 1;
+    mx /= len; my /= len;
+    player.facing.x = mx;
+    player.facing.y = my;
+
+    // 4-directional facing
+    // Primary axis decides dir; horizontal always updates the flip for side-view art
+    const absX = Math.abs(mx), absY = Math.abs(my);
+    if (absX >= absY) {
+      // Horizontal dominates → Left or Right
+      player.dir = mx < 0 ? 1 : 2;
+      player.faceLeft = mx < 0;
+    } else {
+      // Vertical dominates → Up or Down (keep last horizontal face for side-view sprite)
+      player.dir = my < 0 ? 3 : 0;
+      // Still update face if there's any horizontal component (diagonal)
+      if (absX > 0.05) player.faceLeft = mx < 0;
+    }
+    
+    const spd = player.speed * getTileSpeed(player.x, player.y);
+    const nx = player.x + mx * spd;
+    const ny = player.y + my * spd;
+    if (canMove(nx, player.y)) player.x = nx;
+    if (canMove(player.x, ny)) player.y = ny;
+    
+    player.moving = true;
+    player.anim = 'walk';
+    player.frameTimer++;
+    if (player.frameTimer > 5) {
+      player.frame = (player.frame + 1) % knightFrameCount.walk;
+      player.frameTimer = 0;
+    }
+  } else {
+    player.moving = false;
+    player.anim = 'idle';
+    player.frameTimer++;
+    if (player.frameTimer > 10) {
+      player.frame = (player.frame + 1) % knightFrameCount.idle;
+      player.frameTimer = 0;
+    }
+  }
+  
+  // tile damage
+  if (tick % 20 === 0) {
+    const dmg = getTileDamage(player.x, player.y);
+    if (dmg > 0) {
+      player.hp -= dmg;
+      if (player.hp <= 0) {
+        player.hp = 0;
+        gameOver = true;
+        showModal('You Died', 'The dungeon claims another soul...', false);
+      }
+    }
+  }
+  
+  if (player.phase > 0 && tick % 10 === 0) player.phase--;
+  if (player.invuln > 0) player.invuln--;
+  
+  if (keys.e) { doInteract(); keys.e = 0; }
+  if (keys.q) { useHeal(); keys.q = 0; }
+  
+  // Animate sprite enemies (gorgon idle + face player)
+  for (const e of entities) {
+    if (e.type !== 'enemy' || !e.alive || !e.hasSprites) continue;
+    // Face the player
+    if (player.x < e.x - 4) e.faceLeft = true;
+    else if (player.x > e.x + 4) e.faceLeft = false;
+    e.anim = 'idle';
+    e.frameTimer = (e.frameTimer || 0) + 1;
+    if (e.frameTimer > 8) {
+      e.frame = ((e.frame || 0) + 1) % (gorgonFrameCount.idle || 7);
+      e.frameTimer = 0;
+    }
+  }
+  
+  // Check encounter (touch enemy)
+  for (const e of entities) {
+    if (e.type === 'enemy' && e.alive) {
+      const d = Math.hypot(e.x - player.x, e.y - player.y);
+      if (d < 22) {
+        startCombat(e);
+        break;
+      }
+    }
+  }
+  
+  // camera
+  camX = player.x - VIEW_W / 2;
+  camY = player.y - VIEW_H / 2;
+  camX = Math.max(0, Math.min(camX, MAP_W * TILE - VIEW_W));
+  camY = Math.max(0, Math.min(camY, MAP_H * TILE - VIEW_H));
+  
+  // HUD
+  document.getElementById('hp-bar').style.width = (player.hp / player.maxHp * 100) + '%';
+  document.getElementById('hp-text').textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+  document.getElementById('mp-bar').style.width = (player.mp / player.maxMp * 100) + '%';
+  document.getElementById('mp-text').textContent = `${Math.ceil(player.mp)} / ${player.maxMp}`;
+  document.getElementById('armor-bar').style.width = Math.min(100, player.armor * 20) + '%';
+  document.getElementById('armor-text').textContent = player.armor;
+}
+
+// Drawing
+function drawTile(tid, x, y, size = TILE, tx = 0, ty = 0) {
+  const t = tileset[tid];
+  if (!t) return;
+  let drawn = false;
+
+  if (tileAtlasReady) {
+    if (tid === 1 || tid === 7 || tid === 8 || tid === 9 || tid === 14) {
+      // Stone floor (and bases under doors/chests/stairs)
+      drawn = drawFloorTile(x, y, size, tx, ty);
+    } else if (tid === 2 || tid === 10) {
+      // Stone wall
+      drawn = drawWallTile(x, y, size, tx, ty);
+      if (tid === 10 && drawn) {
+        // Torch flicker
+        ctx.fillStyle = `rgba(255,160,40,${0.35 + Math.sin(tick * 0.2) * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + 10, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fa5';
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + 10, 2.5 + Math.sin(tick * 0.25), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (tid === 5) {
+      // Wood floor – stone + warm tint
+      drawn = drawFloorTile(x, y, size, tx, ty);
+      if (drawn) {
+        ctx.fillStyle = 'rgba(160,100,40,0.28)';
+        ctx.fillRect(x, y, size, size);
+      }
+    } else if (tid === 6) {
+      // Wood wall – wall + warm tint
+      drawn = drawWallTile(x, y, size, tx, ty);
+      if (drawn) {
+        ctx.fillStyle = 'rgba(120,70,30,0.38)';
+        ctx.fillRect(x, y, size, size);
+      }
+    } else if (tid === 3) {
+      // Shallow water
+      drawn = drawFloorTile(x, y, size, tx, ty);
+      if (drawn) {
+        ctx.fillStyle = 'rgba(40,120,200,0.5)';
+        ctx.fillRect(x, y, size, size);
+        ctx.fillStyle = 'rgba(120,190,255,0.35)';
+        ctx.fillRect(x + ((tick >> 1) % 20), y + 10, 8, 2);
+      }
+    } else if (tid === 4) {
+      // Deep water
+      drawn = drawFloorTile(x, y, size, tx, ty);
+      if (drawn) {
+        ctx.fillStyle = 'rgba(15,45,110,0.7)';
+        ctx.fillRect(x, y, size, size);
+      }
+    } else if (tid === 11) {
+      // Lava
+      ctx.fillStyle = `hsl(${15 + Math.sin(tick * 0.1 + x) * 15}, 90%, ${35 + Math.sin(tick * 0.15) * 10}%)`;
+      ctx.fillRect(x, y, size, size);
+      drawn = true;
+    } else if (tid === 12) {
+      // Spikes on floor
+      drawn = drawFloorTile(x, y, size, tx, ty);
+      if (drawn) {
+        ctx.fillStyle = '#bbb';
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(x + 6 + i * 10, y + size - 4);
+          ctx.lineTo(x + 10 + i * 10, y + 8);
+          ctx.lineTo(x + 14 + i * 10, y + size - 4);
+          ctx.fill();
+        }
+      }
+    } else if (tid === 0) {
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(x, y, size, size);
+      drawn = true;
+    }
+  }
+
+  if (!drawn) {
+    ctx.fillStyle = t.color;
+    ctx.fillRect(x, y, size, size);
+  }
+}
+
+function drawDecor(tid, x, y) {
+  if (tid === 15) {
+    // Moss
+    ctx.fillStyle = 'rgba(60,140,50,0.45)';
+    ctx.fillRect(x + 4, y + 20, 12, 6);
+    ctx.fillRect(x + 18, y + 22, 10, 5);
+  } else if (tid === 16) {
+    // Rubble
+    ctx.fillStyle = '#666';
+    ctx.fillRect(x + 6, y + 18, 8, 6);
+    ctx.fillRect(x + 16, y + 20, 10, 5);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(x + 10, y + 16, 5, 4);
+  } else if (tid === 19) {
+    // Pillar – simple stone column using wall tile colors
+    ctx.fillStyle = '#7a7a88';
+    ctx.fillRect(x + 9, y + 2, 14, 28);
+    ctx.fillStyle = '#9a9aa8';
+    ctx.fillRect(x + 7, y, 18, 5);
+    ctx.fillRect(x + 7, y + 26, 18, 5);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x + 9, y + 5, 3, 21);
+  }
+}
+
+function drawPlayer(sx, sy) {
+  const blink = player.invuln > 0 && Math.floor(tick / 3) % 2 === 0;
+  if (blink) return;
+
+  // Soft shadow under feet (centered on player position)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 10, 16, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const anim = player.anim || 'idle';
+  const img = knightSprites[anim];
+  const nFrames = knightFrameCount[anim] || 4;
+  const frame = ((player.frame % nFrames) + nFrames) % nFrames;
+
+  if (knightReadyCount >= 6 || (img && img.complete && img.naturalWidth > 0)) {
+    const sw = KNIGHT_FRAME, sh = KNIGHT_FRAME;
+    // On-screen size
+    let dw = 72, dh = 72;
+    if (player.dir === 3) { dw = 66; dh = 66; }
+    else if (player.dir === 0) { dw = 76; dh = 76; }
+
+    // Art faces RIGHT by default → flip when facing left
+    const flipX = player.faceLeft;
+
+    // Character pixels sit on the LEFT of each 128px frame (visual center ~x=34).
+    // Offset so the body centers on the player, not the empty frame padding.
+    const CONTENT_CX = 34; // measured from idle/walk sheets
+    const FOOT_Y = 8;
+    const scale = dw / KNIGHT_FRAME;
+    const ox = -CONTENT_CX * scale;
+    const oy = -dh + FOOT_Y;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (flipX) ctx.scale(-1, 1);
+    ctx.drawImage(img, frame * sw, 0, sw, sh, ox, oy, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#8a9aaa';
+    ctx.fillRect(sx - 12, sy - 28, 24, 32);
+    ctx.fillStyle = '#c0c8d0';
+    ctx.beginPath();
+    ctx.arc(sx, sy - 32, 9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Phase (hashesh) glow
+  if (player.phase > 0) {
+    ctx.strokeStyle = 'rgba(150,255,150,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy - 8, 22, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawEnemy(e, sx, sy) {
+  if (!e.alive) return;
+  const size = e.size || 0.9;
+  
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 10, 14 * size, 5 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Gorgon sprite sheet
+  if (e.hasSprites && e.kind === 'gorgon' && gorgonReadyCount >= 4) {
+    const anim = e.anim || 'idle';
+    const img = gorgonSprites[anim] || gorgonSprites.idle;
+    const nFrames = gorgonFrameCount[anim] || 7;
+    const frame = ((e.frame % nFrames) + nFrames) % nFrames;
+    const sw = GORGON_FRAME, sh = GORGON_FRAME;
+    let dw = 70 * size, dh = 70 * size;
+    
+    // Art faces LEFT → flip when facing right
+    const flipX = !e.faceLeft;
+    const contentCx = e.contentCx || GORGON_CONTENT_CX;
+    const scale = dw / GORGON_FRAME;
+    const ox = -contentCx * scale;
+    const oy = -dh + 10;
+    
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (flipX) ctx.scale(-1, 1);
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, frame * sw, 0, sw, sh, ox, oy, dw, dh);
+    }
+    ctx.restore();
+  } else {
+    // Emoji fallback for other enemies
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.font = `${Math.floor(28 * size)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e.emoji || '👹', 0, -2);
+    ctx.restore();
+  }
+  
+  // Name + HP bar
+  const barW = 32;
+  const hpPct = Math.max(0, e.hp / e.maxHp);
+  const barY = sy - 36 * size;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(sx - barW / 2, barY, barW, 4);
+  ctx.fillStyle = hpPct > 0.5 ? '#4c4' : hpPct > 0.25 ? '#cc4' : '#c44';
+  ctx.fillRect(sx - barW / 2, barY, barW * hpPct, 4);
+  
+  ctx.fillStyle = '#eee';
+  ctx.font = 'bold 9px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(e.name, sx, barY - 8);
+}
+
+function drawEntity(e, sx, sy) {
+  if (e.type === 'enemy') { drawEnemy(e, sx, sy); return; }
+  if (e.type === 'chest') {
+    // Wooden chest
+    ctx.fillStyle = e.opened ? '#5a4030' : '#a0703c';
+    ctx.fillRect(sx - 11, sy - 10, 22, 16);
+    ctx.fillStyle = e.opened ? '#3a2818' : '#c9a050';
+    ctx.fillRect(sx - 11, sy - 10, 22, 5);
+    ctx.fillStyle = e.opened ? '#222' : '#daa520';
+    ctx.fillRect(sx - 3, sy - 4, 6, 5);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.strokeRect(sx - 11, sy - 10, 22, 16);
+    return;
+  }
+  if (e.type === 'door') {
+    if (e.opened) {
+      ctx.fillStyle = 'rgba(160,112,60,0.2)';
+      ctx.fillRect(sx - 14, sy - 14, 28, 28);
+    } else {
+      ctx.fillStyle = '#5c3a1e';
+      ctx.fillRect(sx - 14, sy - 16, 28, 32);
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(sx - 11, sy - 13, 22, 26);
+      ctx.fillStyle = '#c9a050';
+      ctx.beginPath();
+      ctx.arc(sx + 5, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.strokeRect(sx - 14, sy - 16, 28, 32);
+    }
+    return;
+  }
+  if (e.type === 'pickup' && e.alive) {
+    const bob = Math.sin(tick * 0.15) * 3;
+    ctx.font = '16px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(ITEM_ICONS[e.item] || '✨', sx, sy + 6 + bob);
+    return;
+  }
+  if (e.type === 'npc') {
+    ctx.fillStyle = '#6af';
+    ctx.beginPath();
+    ctx.arc(sx, sy - 4, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4a8';
+    ctx.fillRect(sx - 6, sy + 2, 12, 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.props.name || 'NPC', sx, sy - 16);
+    return;
+  }
+  if (e.type === 'stairs') {
+    ctx.fillStyle = '#555';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = i % 2 ? '#666' : '#555';
+      ctx.fillRect(sx - 12 + i * 2, sy - 10 + i * 5, 24 - i * 4, 5);
+    }
+    ctx.fillStyle = '#8af';
+    ctx.font = '10px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('▼', sx, sy + 18);
+  }
+}
+
+function render() {
+  if (inCombat) return; // combat has its own UI
+  
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  
+  const startTX = Math.floor(camX / TILE);
+  const startTY = Math.floor(camY / TILE);
+  const endTX = startTX + Math.ceil(VIEW_W / TILE) + 1;
+  const endTY = startTY + Math.ceil(VIEW_H / TILE) + 1;
+  
+  for (let ty = startTY; ty < endTY; ty++) {
+    for (let tx = startTX; tx < endTX; tx++) {
+      if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) continue;
+      const sx = tx * TILE - camX;
+      const sy = ty * TILE - camY;
+      drawTile(tileMap[ty][tx], sx, sy, TILE, tx, ty);
+      if (decorMap[ty][tx]) drawDecor(decorMap[ty][tx], sx, sy);
+    }
+  }
+  
+  const drawList = entities.filter(e => e.alive || e.type === 'chest' || e.type === 'door' || e.type === 'stairs')
+    .concat([{ type: 'player', x: player.x, y: player.y }]);
+  drawList.sort((a, b) => a.y - b.y);
+  
+  for (const e of drawList) {
+    const sx = e.x - camX;
+    const sy = e.y - camY;
+    if (sx < -40 || sy < -40 || sx > VIEW_W + 40 || sy > VIEW_H + 40) continue;
+    if (e.type === 'player') drawPlayer(sx, sy);
+    else drawEntity(e, sx, sy);
+  }
+  
+  // minimap
+  mctx.fillStyle = '#111';
+  mctx.fillRect(0, 0, 120, 84);
+  const scaleX = 120 / MAP_W;
+  const scaleY = 84 / MAP_H;
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (collision[y][x]) mctx.fillStyle = '#333';
+      else mctx.fillStyle = tileset[tileMap[y][x]]?.color || '#222';
+      mctx.fillRect(x * scaleX, y * scaleY, scaleX + 0.5, scaleY + 0.5);
+    }
+  }
+  mctx.fillStyle = '#0f0';
+  mctx.beginPath();
+  mctx.arc((player.x / TILE) * scaleX, (player.y / TILE) * scaleY, 2, 0, Math.PI*2);
+  mctx.fill();
+  mctx.fillStyle = '#f44';
+  for (const e of entities) {
+    if (e.type === 'enemy' && e.alive) {
+      mctx.fillRect((e.x / TILE) * scaleX - 1, (e.y / TILE) * scaleY - 1, 2, 2);
+    }
+  }
+}
+
+function showModal(title, text, isWin) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-text').innerHTML = text;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('start-btn').textContent = isWin ? 'Play Again' : 'Try Again';
+  document.getElementById('start-btn').onclick = () => location.reload();
+}
+
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById('start-btn').onclick = () => {
+  document.getElementById('overlay').classList.remove('show');
+  gameStarted = true;
+  initEntities();
+  addItem('iron_sword');
+  addItem('potion_health', 2);
+  log('Welcome to the dungeon. Survive and find the stairs.', 'system');
+  log('A bronze key glints nearby... Walk into enemies for combat!', 'info');
+  updateInventoryUI();
+};
+
+document.getElementById('overlay').classList.add('show');
+loop();
+</script>
+</body>
+</html>
